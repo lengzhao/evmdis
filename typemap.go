@@ -8,28 +8,28 @@ type TypeMap struct {
 	data map[reflect.Type]interface{}
 }
 
-func (self *TypeMap) Get(obj interface{}) {
+func (tym *TypeMap) Get(obj interface{}) {
 	element := reflect.ValueOf(obj).Elem()
-	if value, ok := self.data[element.Type()]; ok {
+	if value, ok := tym.data[element.Type()]; ok {
 		element.Set(reflect.ValueOf(value))
 	} else {
 		element.Set(reflect.Zero(element.Type()))
 	}
 }
 
-func (self *TypeMap) Pop(obj interface{}) {
+func (tym *TypeMap) Pop(obj interface{}) {
 	element := reflect.ValueOf(obj).Elem()
-	if value, ok := self.data[element.Type()]; ok {
+	if value, ok := tym.data[element.Type()]; ok {
 		element.Set(reflect.ValueOf(value))
-		delete(self.data, element.Type())
+		delete(tym.data, element.Type())
 	} else {
 		element.Set(reflect.Zero(element.Type()))
 	}
 }
 
-func (self *TypeMap) Set(obj interface{}) {
+func (tym *TypeMap) Set(obj interface{}) {
 	element := reflect.ValueOf(obj).Elem()
-	self.data[element.Type()] = element.Interface()
+	tym.data[element.Type()] = element.Interface()
 }
 
 func NewTypeMap() *TypeMap {

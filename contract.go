@@ -19,11 +19,11 @@ type Instruction struct {
 	//analyses map[reflect.Type]Analysis
 }
 
-func (self *Instruction) String() string {
-	if self.Arg != nil {
-		return fmt.Sprintf("%v 0x%x", self.Op, self.Arg)
+func (instr *Instruction) String() string {
+	if instr.Arg != nil {
+		return fmt.Sprintf("%v 0x%x", instr.Op, instr.Arg)
 	} else {
-		return self.Op.String()
+		return instr.Op.String()
 	}
 }
 
@@ -35,14 +35,14 @@ type BasicBlock struct {
 }
 
 func (bb *BasicBlock) OffsetOf(inst *Instruction) int {
-    offset := bb.Offset
-    for i := 0; i < len(bb.Instructions); i++ {
-        if inst == &bb.Instructions[i] {
-            return offset
-        }
-        offset += bb.Instructions[i].Op.OperandSize() + 1
-    }
-    return -1
+	offset := bb.Offset
+	for i := 0; i < len(bb.Instructions); i++ {
+		if inst == &bb.Instructions[i] {
+			return offset
+		}
+		offset += bb.Instructions[i].Op.OperandSize() + 1
+	}
+	return -1
 }
 
 type Program struct {

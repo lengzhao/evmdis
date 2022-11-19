@@ -50,18 +50,18 @@ type InstructionExpression struct {
 	Arguments []Expression
 }
 
-func (self *InstructionExpression) Eval() *big.Int {
-	return self.Inst.Arg
+func (instr *InstructionExpression) Eval() *big.Int {
+	return instr.Inst.Arg
 }
 
-func (self *InstructionExpression) String() string {
-	if self.Inst.Op.IsPush() {
+func (instr *InstructionExpression) String() string {
+	if instr.Inst.Op.IsPush() {
 		// Print push instructions as just their value
-		return fmt.Sprintf("0x%X", self.Inst.Arg)
-	} else if format, ok := opcodeFormatStrings[self.Inst.Op]; ok {
-		args := make([]interface{}, 0, len(self.Arguments))
-		for _, arg := range self.Arguments {
-			if ie, ok := arg.(*InstructionExpression); ok && operatorPrecedences[ie.Inst.Op] > operatorPrecedences[self.Inst.Op] {
+		return fmt.Sprintf("0x%X", instr.Inst.Arg)
+	} else if format, ok := opcodeFormatStrings[instr.Inst.Op]; ok {
+		args := make([]interface{}, 0, len(instr.Arguments))
+		for _, arg := range instr.Arguments {
+			if ie, ok := arg.(*InstructionExpression); ok && operatorPrecedences[ie.Inst.Op] > operatorPrecedences[instr.Inst.Op] {
 				args = append(args, fmt.Sprintf("(%s)", arg.String()))
 			} else {
 				args = append(args, arg.String())
@@ -70,27 +70,27 @@ func (self *InstructionExpression) String() string {
 		return fmt.Sprintf(format, args...)
 	} else {
 		// Format the opcode as a function call
-		args := make([]string, 0, len(self.Arguments))
-		for _, arg := range self.Arguments {
+		args := make([]string, 0, len(instr.Arguments))
+		for _, arg := range instr.Arguments {
 			args = append(args, arg.String())
 		}
-		return fmt.Sprintf("%s(%s)", self.Inst.Op, strings.Join(args, ", "))
+		return fmt.Sprintf("%s(%s)", instr.Inst.Op, strings.Join(args, ", "))
 	}
 }
 
-type PopExpression struct{
-	Inst      *InstructionPointer
+type PopExpression struct {
+	Inst *InstructionPointer
 }
 
-func (self *PopExpression) String() string {
-	if self.Inst != nil {
-		return "POP("+self.Inst.String()+")"
+func (instr *PopExpression) String() string {
+	if instr.Inst != nil {
+		return "POP(" + instr.Inst.String() + ")"
 	} else {
 		return "POP()"
 	}
 }
 
-func (self *PopExpression) Eval() *big.Int {
+func (instr *PopExpression) Eval() *big.Int {
 	return nil
 }
 
@@ -98,11 +98,11 @@ type SwapExpression struct {
 	count int
 }
 
-func (self *SwapExpression) String() string {
-	return fmt.Sprintf("SWAP%d", self.count)
+func (instr *SwapExpression) String() string {
+	return fmt.Sprintf("SWAP%d", instr.count)
 }
 
-func (self *SwapExpression) Eval() *big.Int {
+func (instr *SwapExpression) Eval() *big.Int {
 	return nil
 }
 
@@ -110,12 +110,12 @@ type DupExpression struct {
 	count int
 }
 
-func (self *DupExpression) Eval() *big.Int {
+func (instr *DupExpression) Eval() *big.Int {
 	return nil
 }
 
-func (self *DupExpression) String() string {
-	return fmt.Sprintf("DUP%d", self.count)
+func (instr *DupExpression) String() string {
+	return fmt.Sprintf("DUP%d", instr.count)
 }
 
 type JumpLabel struct {
@@ -123,12 +123,12 @@ type JumpLabel struct {
 	refCount int
 }
 
-func (self *JumpLabel) Eval() *big.Int {
+func (instr *JumpLabel) Eval() *big.Int {
 	return nil
 }
 
-func (self *JumpLabel) String() string {
-	return fmt.Sprintf(":label%d", self.id)
+func (instr *JumpLabel) String() string {
+	return fmt.Sprintf(":label%d", instr.id)
 }
 
 func CreateLabels(prog *Program) {
@@ -212,7 +212,8 @@ func BuildExpressions(prog *Program) error {
 			var reaching ReachingDefinition
 			inst.Annotations.Get(&reaching)
 			if len(reaching) != inst.Op.StackReads() {
-				return fmt.Errorf("Processing %v@0x%X: expected number of stack reads (%v) to equal reaching definition length (%v)", inst, block.OffsetOf(inst), inst.Op.StackReads(), len(reaching))
+				return fmt.Errorf("processing %v@0x%X: expected number of stack reads (%v) to equal reaching definition length (%v)",
+					inst, block.OffsetOf(inst), inst.Op.StackReads(), len(reaching))
 			}
 
 			if inst.Op.IsSwap() {
@@ -220,12 +221,12 @@ func BuildExpressions(prog *Program) error {
 				swapFrom, swapTo := reaching[0], reaching[len(reaching)-1]
 				leftLifted := len(swapFrom) == 1 && lifted[*swapFrom.First()]
 				rightLifted := len(swapTo) == 1 && lifted[*swapTo.First()]
-                                if leftLifted {
-                                    delete(lifted, *swapFrom.First())
-                                }
-                                if rightLifted {
-                                    delete(lifted, *swapTo.First())
-                                }		
+				if leftLifted {
+					delete(lifted, *swapFrom.First())
+				}
+				if rightLifted {
+					delete(lifted, *swapTo.First())
+				}
 				count := 0
 				if len(reaching) > 2 || (!leftLifted && !rightLifted) {
 					if !leftLifted || !rightLifted {
@@ -238,7 +239,7 @@ func BuildExpressions(prog *Program) error {
 					}
 				}
 				var expression Expression = &SwapExpression{count + 1}
-				inst.Annotations.Set(&expression)				
+				inst.Annotations.Set(&expression)
 			} else if inst.Op.IsDup() {
 				// Try and reduce the size of dup operations to account for lifted arguments
 
@@ -306,7 +307,7 @@ func BuildExpressions(prog *Program) error {
 			}
 		}
 		if len(lifted) != 0 {
-			return fmt.Errorf("Expected all lifted arguments to be consumed by end of block: %v", lifted)
+			return fmt.Errorf("expected all lifted arguments to be consumed by end of block: %v", lifted)
 		}
 	}
 

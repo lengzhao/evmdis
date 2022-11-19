@@ -5,11 +5,11 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 
-	"github.com/Arachnid/evmdis"
+	"github.com/lengzhao/evmdis"
 )
 
 const swarmHashLength = 43
@@ -23,14 +23,15 @@ func main() {
 	ctorMode := flag.Bool("ctor", false, "Indicates that the provided bytecode has construction(ctor) code included. (needs to be analyzed separately)")
 	logging := flag.Bool("log", false, "print logging output")
 	binary := flag.Bool("bin", false, "read binary file")
+	fn := flag.String("file", "code.bin", "code file")
 
 	flag.Parse()
 
 	if !*logging {
-		log.SetOutput(ioutil.Discard)
+		log.SetOutput(io.Discard)
 	}
 
-	data, err := ioutil.ReadAll(os.Stdin)
+	data, err := os.ReadFile(*fn)
 	if err != nil {
 		panic(fmt.Sprintf("Could not read from stdin: %v", err))
 	}
@@ -154,7 +155,7 @@ func PrintAnalysisResult(program *evmdis.Program) (disassembly string) {
 			offset += instruction.Op.OperandSize() + 1
 		}
 
-		blockDisassembly += fmt.Sprintf("\n")
+		blockDisassembly += fmt.Sprintln("")
 
 		// avoid printing empty stack frames with no instructions in the block
 		if len(reaching) > 0 || blockRealInstructions > 0 {
@@ -167,12 +168,12 @@ func PrintAnalysisResult(program *evmdis.Program) (disassembly string) {
 
 func AnalyzeProgram(program *evmdis.Program) (err error) {
 	if err := evmdis.PerformReachingAnalysis(program); err != nil {
-		return fmt.Errorf("Error performing reaching analysis: %v", err)
+		return fmt.Errorf("error performing reaching analysis: %v", err)
 	}
 	evmdis.PerformReachesAnalysis(program)
 	evmdis.CreateLabels(program)
 	if err := evmdis.BuildExpressions(program); err != nil {
-		return fmt.Errorf("Error building expressions: %v", err)
+		return fmt.Errorf("error building expressions: %v", err)
 	}
 
 	return nil

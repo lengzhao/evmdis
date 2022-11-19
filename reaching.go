@@ -2,9 +2,10 @@ package evmdis
 
 import (
 	"fmt"
-	"github.com/Arachnid/evmdis/stack"
 	"log"
 	"strings"
+
+	"github.com/lengzhao/evmdis/stack"
 )
 
 type InstructionPointer struct {
@@ -12,41 +13,40 @@ type InstructionPointer struct {
 	OriginIndex int
 }
 
-func (self InstructionPointer) Get() *Instruction {
-	return &self.OriginBlock.Instructions[self.OriginIndex]
+func (instr InstructionPointer) Get() *Instruction {
+	return &instr.OriginBlock.Instructions[instr.OriginIndex]
 }
 
-func (self InstructionPointer) GetAddress() int {
-	address := self.OriginBlock.Offset
-	for i := 0; i < self.OriginIndex; i++ {
-		address += self.OriginBlock.Instructions[i].Op.OperandSize() + 1
+func (instr InstructionPointer) GetAddress() int {
+	address := instr.OriginBlock.Offset
+	for i := 0; i < instr.OriginIndex; i++ {
+		address += instr.OriginBlock.Instructions[i].Op.OperandSize() + 1
 	}
 	return address
 }
 
-func (self InstructionPointer) String() string {
-	inst := self.Get()
+func (instr InstructionPointer) String() string {
+	inst := instr.Get()
 
 	var expression Expression
 	inst.Annotations.Get(&expression)
 	switch expression := expression.(type) {
 	case *InstructionExpression:
-		if(expression.Inst.Op.IsPush()) {
+		if expression.Inst.Op.IsPush() {
 			return fmt.Sprintf("0x%X", expression.Inst.Arg)
 		}
-		break;
 	case *JumpLabel:
 		return fmt.Sprintf("%v", expression)
 	}
 
-	return fmt.Sprintf("@0x%X", self.GetAddress())
+	return fmt.Sprintf("@0x%X", instr.GetAddress())
 }
 
 type InstructionPointerSet map[InstructionPointer]bool
 
-func (self InstructionPointerSet) String() string {
+func (instr InstructionPointerSet) String() string {
 	pointers := make([]string, 0)
-	for k := range self {
+	for k := range instr {
 		pointers = append(pointers, k.String())
 	}
 	if len(pointers) == 1 {
@@ -56,8 +56,8 @@ func (self InstructionPointerSet) String() string {
 	}
 }
 
-func (self InstructionPointerSet) First() *InstructionPointer {
-	for pointer, _ := range self {
+func (instr InstructionPointerSet) First() *InstructionPointer {
+	for pointer := range instr {
 		return &pointer
 	}
 	return nil
@@ -122,13 +122,13 @@ func updateReachings(inst *Instruction, operands []InstructionPointer) {
 	inst.Annotations.Set(&reachings)
 }
 
-func (self reachingState) Advance() ([]EvmState, error) {
-	log.Printf("Entering block at %d with stack height %v", self.nextBlock.Offset, self.stack.Height())
-	updateBlockReachings(self.nextBlock, self.stack)
-	pc := self.nextBlock.Offset
-	st := self.stack
-	for i := range self.nextBlock.Instructions {
-		inst := &self.nextBlock.Instructions[i]
+func (instr reachingState) Advance() ([]EvmState, error) {
+	log.Printf("Entering block at %d with stack height %v", instr.nextBlock.Offset, instr.stack.Height())
+	updateBlockReachings(instr.nextBlock, instr.stack)
+	pc := instr.nextBlock.Offset
+	st := instr.stack
+	for i := range instr.nextBlock.Instructions {
+		inst := &instr.nextBlock.Instructions[i]
 		op := inst.Op
 		opFrames, newStack := stack.Popn(st, op.StackReads())
 		operands := make([]InstructionPointer, len(opFrames))
@@ -150,7 +150,7 @@ func (self reachingState) Advance() ([]EvmState, error) {
 		case op == SELFDESTRUCT:
 			return nil, nil
 		case op.IsPush():
-			newStack = stack.NewFrame(newStack, InstructionPointer{self.nextBlock, i})
+			newStack = stack.NewFrame(newStack, InstructionPointer{instr.nextBlock, i})
 		case op.IsDup():
 			// Uses stack instead of newStack, because we don't actually want to pop all those elements
 			newStack = stack.NewFrame(st, stack.UpBy(st, op.StackReads()-1).Value())
@@ -161,10 +161,10 @@ func (self reachingState) Advance() ([]EvmState, error) {
 			if !operands[0].Get().Op.IsPush() {
 				return nil, fmt.Errorf("%v: Could not determine jump location statically; source is %v", pc, operands[0].GetAddress())
 			}
-			if dest, ok := self.program.JumpDestinations[int(operands[0].Get().Arg.Int64())]; ok {
+			if dest, ok := instr.program.JumpDestinations[int(operands[0].Get().Arg.Int64())]; ok {
 				return []EvmState{
 					reachingState{
-						program:   self.program,
+						program:   instr.program,
 						nextBlock: dest,
 						stack:     newStack,
 					},
@@ -176,26 +176,26 @@ func (self reachingState) Advance() ([]EvmState, error) {
 				return nil, fmt.Errorf("%v: Could not determine jump location statically; source is %v", pc, operands[0].GetAddress())
 			}
 			var ret []EvmState
-			if dest, ok := self.program.JumpDestinations[int(operands[0].Get().Arg.Int64())]; ok {
+			if dest, ok := instr.program.JumpDestinations[int(operands[0].Get().Arg.Int64())]; ok {
 				ret = append(ret, reachingState{
-					program:   self.program,
+					program:   instr.program,
 					nextBlock: dest,
 					stack:     newStack,
 				})
 			}
-			if self.nextBlock.Next != nil {
+			if instr.nextBlock.Next != nil {
 				ret = append(ret, reachingState{
-					program:   self.program,
-					nextBlock: self.nextBlock.Next,
+					program:   instr.program,
+					nextBlock: instr.nextBlock.Next,
 					stack:     newStack,
 				})
 			}
 			return ret, nil
 		default:
 			if op.StackWrites() == 1 {
-				newStack = stack.NewFrame(newStack, InstructionPointer{self.nextBlock, i})
+				newStack = stack.NewFrame(newStack, InstructionPointer{instr.nextBlock, i})
 			} else if op.StackWrites() > 1 {
-				return nil, fmt.Errorf("Unexpected op %v makes %v writes to the stack", op, op.StackWrites())
+				return nil, fmt.Errorf("unexpected op %v makes %v writes to the stack", op, op.StackWrites())
 			}
 		}
 
@@ -208,11 +208,11 @@ func (self reachingState) Advance() ([]EvmState, error) {
 		st = newStack
 	}
 
-	if self.nextBlock.Next != nil {
+	if instr.nextBlock.Next != nil {
 		return []EvmState{
 			reachingState{
-				program:   self.program,
-				nextBlock: self.nextBlock.Next,
+				program:   instr.program,
+				nextBlock: instr.nextBlock.Next,
 				stack:     st,
 			},
 		}, nil
@@ -223,9 +223,9 @@ func (self reachingState) Advance() ([]EvmState, error) {
 
 type ReachesDefinition []InstructionPointer
 
-func (self ReachesDefinition) String() string {
+func (instr ReachesDefinition) String() string {
 	parts := make([]string, 0)
-	for _, pointer := range self {
+	for _, pointer := range instr {
 		parts = append(parts, pointer.String())
 	}
 	return fmt.Sprintf("%v", parts)
